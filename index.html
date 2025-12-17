@@ -8,6 +8,22 @@ Short browser RPG
 <title>LAST SHIFT</title>
 
 <style>
+  #ending {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: black;
+  color: white;
+  font-family: monospace;
+  font-size: 28px;
+  text-align: center;
+  padding-top: 40vh;
+  z-index: 9999;
+}
+
 body{
   margin:0;
   background:#000;
@@ -262,6 +278,16 @@ document.addEventListener("click",()=>bgmTitle.play(),{once:true});
 bgmTitle.volume=0.3;
 bgmTitle.play();
 </script>
+  function showEnding() {
+  document.getElementById("ending").style.display = "block";
+  document.removeEventListener("keydown", movePlayer);
+}
+
 
 </body>
+  <div id="ending">
+  <p>THANK YOU FOR PLAYING</p>
+  <p>― THE END ―</p>
+</div>
+
 </html>
