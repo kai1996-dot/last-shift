@@ -1,293 +1,139 @@
-# last-shift
-Short browser RPG
 <!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LAST SHIFT</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
-  #ending {
+body {
+  margin: 0;
+  background: #000;
+  color: #fff;
+  font-family: monospace;
+}
+
+#game {
+  width: 320px;
+  height: 320px;
+  margin: 40px auto;
+  background: #111;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  grid-template-rows: repeat(10, 1fr);
+  border: 4px solid #fff;
+}
+
+.cell {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.player { color: #0f0; }
+.goal { color: #ff0; }
+
+#pad {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+#pad button {
+  width: 50px;
+  height: 50px;
+  margin: 4px;
+  font-size: 20px;
+}
+
+/* エンディング */
+#ending {
   display: none;
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   background: black;
   color: white;
-  font-family: monospace;
-  font-size: 28px;
   text-align: center;
+  font-size: 28px;
   padding-top: 40vh;
   z-index: 9999;
-}
-
-body{
-  margin:0;
-  background:#000;
-  color:#fff;
-  font-family: monospace;
-  text-align:center;
-}
-.window{
-  border:2px solid #fff;
-  padding:10px;
-  margin:10px auto;
-  width:90%;
-  max-width:420px;
-}
-.selected{
-  background:#fff;
-  color:#000;
-}
-#map{
-  white-space:pre;
-  font-size:14px;
-  line-height:1.4;
-}
-
-/* タイトル演出 */
-@keyframes pixelIn{
-  from{filter:blur(6px);opacity:0;}
-  to{filter:blur(0);opacity:1;}
-}
-#titleScreen{
-  animation:pixelIn 1.2s steps(6,end);
-}
-#titleScreen h1{
-  letter-spacing:4px;
-  text-shadow:
-    1px 0 #000,0 1px #000,
-   -1px 0 #000,0 -1px #000;
 }
 </style>
 </head>
 
 <body>
 
-<!-- タイトル -->
-<div id="titleScreen" class="window">
-  <h1>LAST SHIFT</h1>
-  <p>― 今日を終えるためのRPG ―</p>
-  <p style="font-size:12px;">ver 1.0</p>
+<div id="game"></div>
 
-  <div id="difficulty" class="window">
-    <div data-d="easy">▶ EASY</div>
-    <div data-d="normal">  NORMAL</div>
-    <div data-d="hard">  HARD</div>
+<div id="pad">
+  <div><button onclick="move(0,-1)">▲</button></div>
+  <div>
+    <button onclick="move(-1,0)">◀</button>
+    <button onclick="move(1,0)">▶</button>
   </div>
-
-  <div class="selected" onclick="startGame()">▶ START</div>
-  <p style="font-size:12px;">Enter / Tap</p>
+  <div><button onclick="move(0,1)">▼</button></div>
 </div>
 
-<!-- マップ -->
-<div id="mapScreen" style="display:none;">
-  <div class="window" id="map"></div>
-  <div class="window" id="status"></div>
+<div id="ending">
+  THANK YOU FOR PLAYING<br><br>
+  ― THE END ―
 </div>
-
-<!-- 戦闘 -->
-<div id="battleScreen" class="window" style="display:none;"></div>
-
-<!-- エンディング -->
-<div id="endingScreen" class="window" style="display:none;">
-  <h2>END</h2>
-  <p>
-    今日も一日、<br>
-    何も起きなかった。<br><br>
-    それでいい。<br>
-    それが、よかった。
-  </p>
-  <p style="font-size:12px;">THANK YOU FOR PLAYING</p>
-  <div class="selected" onclick="backToTitle()">▶ TITLE</div>
-</div>
-
-<!-- BGM -->
-<audio id="bgmTitle" loop src="https://files.catbox.moe/1q8wq4.mp3"></audio>
-<audio id="bgmField" loop src="https://files.catbox.moe/x6b6h5.mp3"></audio>
 
 <script>
-/* ===== 要素 ===== */
-const titleScreen=document.getElementById("titleScreen");
-const mapScreen=document.getElementById("mapScreen");
-const battleScreen=document.getElementById("battleScreen");
-const endingScreen=document.getElementById("endingScreen");
-const mapEl=document.getElementById("map");
-const statusEl=document.getElementById("status");
-const bgmTitle=document.getElementById("bgmTitle");
-const bgmField=document.getElementById("bgmField");
+const size = 10;
+const game = document.getElementById("game");
 
-/* ===== 難易度 ===== */
-let difficulty=localStorage.getItem("difficulty")||"normal";
-const diff={
-  easy:{dmg:0.8,heal:1.3,heals:4,enemy:0.9},
-  normal:{dmg:1,heal:1,heals:3,enemy:1},
-  hard:{dmg:1.2,heal:0.8,heals:2,enemy:1.2}
-};
-function selectDifficulty(d){
-  difficulty=d;
-  localStorage.setItem("difficulty",d);
-  document.querySelectorAll("#difficulty div").forEach(v=>{
-    v.classList.toggle("selected",v.dataset.d===d);
-  });
-}
-document.querySelectorAll("#difficulty div").forEach(v=>{
-  v.onclick=()=>selectDifficulty(v.dataset.d);
-});
-selectDifficulty(difficulty);
+const player = { x: 0, y: 0 };
+const goal = { x: 9, y: 9 };
 
-/* ===== プレイヤー ===== */
-let winCount=0;
-let player={
-  x:2,y:2,
-  hp:30,maxHp:30,
-  heals:diff[difficulty].heals
-};
+function draw() {
+  game.innerHTML = "";
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const cell = document.createElement("div");
+      cell.className = "cell";
 
-/* ===== マップ ===== */
-const map=[
-"#####",
-"#...#",
-"#...#",
-"#...#",
-"#####"
-];
+      if (x === player.x && y === player.y) {
+        cell.textContent = "@";
+        cell.classList.add("player");
+      } else if (x === goal.x && y === goal.y) {
+        cell.textContent = "G";
+        cell.classList.add("goal");
+      }
 
-function draw(){
-  let out="";
-  for(let y=0;y<map.length;y++){
-    for(let x=0;x<map[y].length;x++){
-      out+=(x===player.x&&y===player.y)?"@":map[y][x];
+      game.appendChild(cell);
     }
-    out+="\n";
   }
-  mapEl.textContent=out;
-  statusEl.textContent=
-`HP ${player.hp}/${player.maxHp}
-回復 ${player.heals}
-難易度 ${difficulty.toUpperCase()}
-勝利 ${winCount}/3`;
 }
 
-/* ===== 戦闘 ===== */
-function battle(){
-  mapScreen.style.display="none";
-  battleScreen.style.display="block";
-  let enemyHp=Math.floor(15*diff[difficulty].enemy);
-
-  function render(){
-    battleScreen.innerHTML=
-`敵が現れた！
-HP:${enemyHp}
-
-<div onclick="attack()">▶ たたかう</div>
-<div onclick="heal()">▶ かいふく</div>`;
-  }
-
-  window.attack=()=>{
-    enemyHp-=Math.floor(Math.random()*6+4);
-    if(enemyHp<=0){endBattle(true);return;}
-    player.hp-=Math.floor((Math.random()*6+3)*diff[difficulty].dmg);
-    if(player.hp<=0){endBattle(false);return;}
-    render();
-  };
-
-  window.heal=()=>{
-    if(player.heals<=0)return;
-    player.heals--;
-    player.hp=Math.min(
-      player.maxHp,
-      player.hp+Math.floor((8+Math.random()*5)*diff[difficulty].heal)
-    );
-    render();
-  };
-
-  render();
-}
-
-function endBattle(win){
-  battleScreen.style.display="none";
-  if(!win){
-    alert("倒れた…");
-    location.reload();
-    return;
-  }
-  winCount++;
-  if(winCount>=3){
-    showEnding();
-    return;
-  }
-  mapScreen.style.display="block";
-  draw();
-}
-
-/* ===== エンディング ===== */
-function showEnding(){
-  mapScreen.style.display="none";
-  bgmField.pause();
-  endingScreen.style.display="block";
-}
-function backToTitle(){
-  endingScreen.style.display="none";
-  winCount=0;
-  player.hp=player.maxHp;
-  player.heals=diff[difficulty].heals;
-  player.x=2; player.y=2;
-  titleScreen.style.display="block";
-  titleScreen.style.opacity=1;
-  bgmTitle.currentTime=0;
-  bgmTitle.play();
-}
-
-/* ===== 操作 ===== */
-document.addEventListener("keydown",e=>{
-  if(titleScreen.style.display!=="none"){
-    if(e.key==="Enter")startGame();
-    return;
-  }
-  let nx=player.x,ny=player.y;
-  if(e.key==="ArrowUp")ny--;
-  if(e.key==="ArrowDown")ny++;
-  if(e.key==="ArrowLeft")nx--;
-  if(e.key==="ArrowRight")nx++;
-  if(map[ny][nx]==="."){
-    player.x=nx; player.y=ny;
-    if(Math.random()<0.25)battle();
-  }
-  draw();
-});
-
-/* ===== 開始 ===== */
-function startGame(){
-  titleScreen.style.opacity=0;
-  setTimeout(()=>{
-    titleScreen.style.display="none";
-    mapScreen.style.display="block";
-    bgmTitle.pause();
-    bgmField.volume=0.3;
-    bgmField.play();
-    draw();
-  },500);
-}
-
-/* スマホBGM対策 */
-document.addEventListener("click",()=>bgmTitle.play(),{once:true});
-bgmTitle.volume=0.3;
-bgmTitle.play();
-</script>
-  function showEnding() {
+function showEnding() {
   document.getElementById("ending").style.display = "block";
-  document.removeEventListener("keydown", movePlayer);
+  document.removeEventListener("keydown", handleKey);
 }
 
+function move(dx, dy) {
+  player.x = Math.max(0, Math.min(size - 1, player.x + dx));
+  player.y = Math.max(0, Math.min(size - 1, player.y + dy));
+  draw();
+
+  if (player.x === goal.x && player.y === goal.y) {
+    showEnding();
+  }
+}
+
+function handleKey(e) {
+  if (e.key === "ArrowUp") move(0, -1);
+  if (e.key === "ArrowDown") move(0, 1);
+  if (e.key === "ArrowLeft") move(-1, 0);
+  if (e.key === "ArrowRight") move(1, 0);
+}
+
+document.addEventListener("keydown", handleKey);
+draw();
+</script>
 
 </body>
-  <div id="ending">
-  <p>THANK YOU FOR PLAYING</p>
-  <p>― THE END ―</p>
-</div>
-
 </html>
+
